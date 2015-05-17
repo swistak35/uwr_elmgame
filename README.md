@@ -2,6 +2,8 @@
 
 Game prepared for advanced functional programming seminar on University of Wrocław
 
+You can play it here: [click](http://elmgame.idefix.swistak35.com/)
+
 ## How to play
 
 Moving ship = moving mouse
@@ -9,6 +11,7 @@ Moving ship = moving mouse
 Shoot = Left click
 
 How to win? You can't. You can only lose by letting one of the enemy ships pass trough your defence (hit lower part of the screen).
+
 
 ## How to run it
 
