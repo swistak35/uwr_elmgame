@@ -1,0 +1,428 @@
+Elm.Main = Elm.Main || {};
+Elm.Main.make = function (_elm) {
+   "use strict";
+   _elm.Main = _elm.Main || {};
+   if (_elm.Main.values)
+   return _elm.Main.values;
+   var _op = {},
+   _N = Elm.Native,
+   _U = _N.Utils.make(_elm),
+   _L = _N.List.make(_elm),
+   $moduleName = "Main",
+   $Basics = Elm.Basics.make(_elm),
+   $Color = Elm.Color.make(_elm),
+   $Graphics$Collage = Elm.Graphics.Collage.make(_elm),
+   $Graphics$Element = Elm.Graphics.Element.make(_elm),
+   $List = Elm.List.make(_elm),
+   $Mouse = Elm.Mouse.make(_elm),
+   $Random = Elm.Random.make(_elm),
+   $Signal = Elm.Signal.make(_elm),
+   $Time = Elm.Time.make(_elm),
+   $Window = Elm.Window.make(_elm);
+   var displayGameOver = function (gs) {
+      return A2($Graphics$Element.flow,
+      $Graphics$Element.down,
+      _L.fromArray([$Graphics$Element.show("Koniec gry!")]));
+   };
+   var basicShipForm = $Graphics$Collage.rotate($Basics.degrees(-30))($Graphics$Collage.filled($Color.red)(A2($Graphics$Collage.ngon,
+   3,
+   30)));
+   var basicEnemyForm = $Graphics$Collage.rotate($Basics.degrees(-18))($Graphics$Collage.filled($Color.blue)(A2($Graphics$Collage.ngon,
+   5,
+   20)));
+   var basicBulletForm = $Graphics$Collage.filled($Color.blue)(A2($Graphics$Collage.rect,
+   5,
+   20));
+   var move$ = F2(function (pos,
+   f) {
+      return A2($Graphics$Collage.move,
+      {ctor: "_Tuple2"
+      ,_0: $Basics.toFloat(pos.x - 400)
+      ,_1: $Basics.toFloat(400 - pos.y)},
+      f);
+   });
+   var mkBulletForm = function (b) {
+      return A2(move$,
+      b.position,
+      basicBulletForm);
+   };
+   var bulletsForms = function (gameState) {
+      return A2($List.map,
+      mkBulletForm,
+      gameState.bullets);
+   };
+   var mkEnemyForm = function (e) {
+      return A2(move$,
+      e.position,
+      basicEnemyForm);
+   };
+   var enemiesForms = function (gameState) {
+      return A2($List.map,
+      mkEnemyForm,
+      gameState.enemies);
+   };
+   var shipForm = function (gameState) {
+      return A2(move$,
+      gameState.mPosition,
+      basicShipForm);
+   };
+   var itemsToShow = function (gs) {
+      return function () {
+         var enemies = enemiesForms(gs);
+         var bullets = bulletsForms(gs);
+         var ship = shipForm(gs);
+         return A2($List._op["::"],
+         ship,
+         A2($Basics._op["++"],
+         bullets,
+         enemies));
+      }();
+   };
+   var displayGame = function (gs) {
+      return A2($Graphics$Element.flow,
+      $Graphics$Element.down,
+      _L.fromArray([A2($Graphics$Collage.collage,
+                   800,
+                   800)(itemsToShow(gs))
+                   ,$Graphics$Element.show(gs.mPosition)
+                   ,$Graphics$Element.show(gs.clicks)
+                   ,$Graphics$Element.show(gs.elapsedTime)
+                   ,$Graphics$Element.show(gs.enemies)]));
+   };
+   var display = F2(function (_v0,
+   gs) {
+      return function () {
+         switch (_v0.ctor)
+         {case "_Tuple2":
+            return gs.gameOver ? displayGameOver(gs) : displayGame(gs);}
+         _U.badCase($moduleName,
+         "between lines 228 and 229");
+      }();
+   });
+   var enemyBelowScreen = function (e) {
+      return _U.cmp(e.position.y,
+      800) > -1;
+   };
+   var checkIfGameOver = function (gs) {
+      return A2($List.any,
+      enemyBelowScreen,
+      gs.enemies) ? _U.replace([["gameOver"
+                                ,true]],
+      gs) : gs;
+   };
+   var incrementClicks = function (gs) {
+      return _U.replace([["clicks"
+                         ,gs.clicks + 1]],
+      gs);
+   };
+   var updatePosition = F2(function (newPos,
+   gs) {
+      return _U.replace([["mPosition"
+                         ,newPos]],
+      gs);
+   });
+   var updateElapsedTime = F2(function (delta,
+   gs) {
+      return _U.replace([["elapsedTime"
+                         ,gs.elapsedTime + delta]],
+      gs);
+   });
+   var inBoard = function (_v4) {
+      return function () {
+         return _U.cmp(_v4.x,
+         0) > 0 && (_U.cmp(_v4.x,
+         800) < 0 && (_U.cmp(_v4.y,
+         0) > 0 && _U.cmp(_v4.y,
+         800) < 0));
+      }();
+   };
+   var inBoardBullet = function (b) {
+      return inBoard(b.position);
+   };
+   var removeOutOfTheBoardBullets = function (gs) {
+      return _U.replace([["bullets"
+                         ,A2($List.filter,
+                         inBoardBullet,
+                         gs.bullets)]],
+      gs);
+   };
+   var inBoardEnemy = function (e) {
+      return inBoard(e.position);
+   };
+   var removeOutOfTheBoardEnemies = function (gs) {
+      return _U.replace([["enemies"
+                         ,A2($List.filter,
+                         inBoardEnemy,
+                         gs.enemies)]],
+      gs);
+   };
+   var collision = F2(function (e,
+   b) {
+      return _U.cmp($Basics.abs(b.position.y - e.position.y),
+      30) < 0 && _U.cmp($Basics.abs(b.position.x - e.position.x),
+      22) < 0;
+   });
+   var enemyHit = F2(function (bs,
+   enemy) {
+      return A2($List.all,
+      function (b) {
+         return $Basics.not(A2(collision,
+         enemy,
+         b));
+      },
+      bs);
+   });
+   var checkCollisions = function (gs) {
+      return _U.replace([["enemies"
+                         ,A2($List.filter,
+                         enemyHit(gs.bullets),
+                         gs.enemies)]],
+      gs);
+   };
+   var randomPosition = function (gs) {
+      return function () {
+         var $ = A2($Random.generate,
+         A2($Random.$int,50,750),
+         gs.seed),
+         valueX = $._0,
+         newSeed = $._1;
+         var position = {_: {}
+                        ,x: valueX
+                        ,y: 50};
+         var gs$ = _U.replace([["seed"
+                               ,newSeed]],
+         gs);
+         return {ctor: "_Tuple2"
+                ,_0: gs$
+                ,_1: position};
+      }();
+   };
+   var addEnemy = function (gs) {
+      return function () {
+         var $ = randomPosition(gs),
+         gs$ = $._0,
+         newPosition = $._1;
+         var newEnemy = {_: {}
+                        ,position: newPosition};
+         return _U.replace([["createdEnemies"
+                            ,gs.createdEnemies + 1]
+                           ,["enemies"
+                            ,A2($List._op["::"],
+                            newEnemy,
+                            gs.enemies)]],
+         gs$);
+      }();
+   };
+   var addEnemyIfNeeded = function (gs) {
+      return _U.cmp($Basics.round(gs.elapsedTime),
+      gs.createdEnemies * 500) > 0 ? addEnemy(gs) : gs;
+   };
+   var addBullet = function (gs) {
+      return function () {
+         var newBullet = {_: {}
+                         ,position: gs.mPosition};
+         return _U.replace([["bullets"
+                            ,A2($List._op["::"],
+                            newBullet,
+                            gs.bullets)]],
+         gs);
+      }();
+   };
+   var enemySpeed = 5;
+   var moveEnemy = function (e) {
+      return function () {
+         var newPosition = {_: {}
+                           ,x: e.position.x
+                           ,y: e.position.y + enemySpeed};
+         return _U.replace([["position"
+                            ,newPosition]],
+         e);
+      }();
+   };
+   var moveEnemies = function (gs) {
+      return _U.replace([["enemies"
+                         ,A2($List.map,
+                         moveEnemy,
+                         gs.enemies)]],
+      gs);
+   };
+   var bulletSpeed = 10;
+   var moveBullet = function (b) {
+      return function () {
+         var newPosition = {_: {}
+                           ,x: b.position.x
+                           ,y: b.position.y - bulletSpeed};
+         return _U.replace([["position"
+                            ,newPosition]],
+         b);
+      }();
+   };
+   var moveBullets = function (gs) {
+      return _U.replace([["bullets"
+                         ,A2($List.map,
+                         moveBullet,
+                         gs.bullets)]],
+      gs);
+   };
+   var stepGameFn = function (userInput) {
+      return function () {
+         switch (userInput.ctor)
+         {case "MouseClick":
+            switch (userInput._0.ctor)
+              {case "_Tuple0":
+                 return function ($) {
+                      return addBullet(incrementClicks($));
+                   };}
+              break;
+            case "MousePosition":
+            return updatePosition(userInput._0);
+            case "Timer":
+            return function ($) {
+                 return updateElapsedTime(userInput._0)(addEnemyIfNeeded(checkCollisions(moveEnemies(moveBullets(removeOutOfTheBoardEnemies(removeOutOfTheBoardBullets(checkIfGameOver($))))))));
+              };}
+         _U.badCase($moduleName,
+         "between lines 160 and 171");
+      }();
+   };
+   var stepGame = F2(function (userInput,
+   gameState) {
+      return A2(stepGameFn,
+      userInput,
+      gameState);
+   });
+   var defaultGame = {_: {}
+                     ,bullets: _L.fromArray([])
+                     ,clicks: 0
+                     ,createdEnemies: 0
+                     ,elapsedTime: 0.0
+                     ,enemies: _L.fromArray([])
+                     ,gameOver: false
+                     ,mPosition: {_: {},x: 0,y: 0}
+                     ,seed: $Random.initialSeed(30)};
+   var GameState = F8(function (a,
+   b,
+   c,
+   d,
+   e,
+   f,
+   g,
+   h) {
+      return {_: {}
+             ,bullets: c
+             ,clicks: b
+             ,createdEnemies: f
+             ,elapsedTime: e
+             ,enemies: d
+             ,gameOver: h
+             ,mPosition: a
+             ,seed: g};
+   });
+   var Enemy = function (a) {
+      return {_: {},position: a};
+   };
+   var Bullet = function (a) {
+      return {_: {},position: a};
+   };
+   var Timer = function (a) {
+      return {ctor: "Timer",_0: a};
+   };
+   var timerInput = A2($Signal._op["<~"],
+   Timer,
+   $Time.fps(30));
+   var MousePosition = function (a) {
+      return {ctor: "MousePosition"
+             ,_0: a};
+   };
+   var MouseClick = function (a) {
+      return {ctor: "MouseClick"
+             ,_0: a};
+   };
+   var mouseClickInput = A2($Signal._op["<~"],
+   MouseClick,
+   $Mouse.clicks);
+   var pairToPosition = function (_v10) {
+      return function () {
+         switch (_v10.ctor)
+         {case "_Tuple2": return {_: {}
+                                 ,x: _v10._0
+                                 ,y: _v10._1};}
+         _U.badCase($moduleName,
+         "on line 21, column 29 to 43");
+      }();
+   };
+   var mousePositionInput = A2($Signal._op["<~"],
+   function ($) {
+      return MousePosition(pairToPosition($));
+   },
+   $Mouse.position);
+   var input = $Signal.mergeMany(_L.fromArray([mouseClickInput
+                                              ,mousePositionInput
+                                              ,timerInput]));
+   var gameState = A3($Signal.foldp,
+   stepGame,
+   defaultGame,
+   input);
+   var main = A3($Signal.map2,
+   display,
+   $Window.dimensions,
+   gameState);
+   var Position = F2(function (a,
+   b) {
+      return {_: {},x: a,y: b};
+   });
+   _elm.Main.values = {_op: _op
+                      ,Position: Position
+                      ,pairToPosition: pairToPosition
+                      ,MouseClick: MouseClick
+                      ,MousePosition: MousePosition
+                      ,Timer: Timer
+                      ,mouseClickInput: mouseClickInput
+                      ,mousePositionInput: mousePositionInput
+                      ,timerInput: timerInput
+                      ,Bullet: Bullet
+                      ,Enemy: Enemy
+                      ,GameState: GameState
+                      ,defaultGame: defaultGame
+                      ,bulletSpeed: bulletSpeed
+                      ,enemySpeed: enemySpeed
+                      ,addBullet: addBullet
+                      ,moveBullet: moveBullet
+                      ,moveBullets: moveBullets
+                      ,randomPosition: randomPosition
+                      ,addEnemy: addEnemy
+                      ,moveEnemy: moveEnemy
+                      ,moveEnemies: moveEnemies
+                      ,collision: collision
+                      ,enemyHit: enemyHit
+                      ,checkCollisions: checkCollisions
+                      ,addEnemyIfNeeded: addEnemyIfNeeded
+                      ,inBoard: inBoard
+                      ,inBoardBullet: inBoardBullet
+                      ,removeOutOfTheBoardBullets: removeOutOfTheBoardBullets
+                      ,inBoardEnemy: inBoardEnemy
+                      ,removeOutOfTheBoardEnemies: removeOutOfTheBoardEnemies
+                      ,updateElapsedTime: updateElapsedTime
+                      ,updatePosition: updatePosition
+                      ,incrementClicks: incrementClicks
+                      ,enemyBelowScreen: enemyBelowScreen
+                      ,checkIfGameOver: checkIfGameOver
+                      ,stepGameFn: stepGameFn
+                      ,stepGame: stepGame
+                      ,move$: move$
+                      ,basicBulletForm: basicBulletForm
+                      ,basicEnemyForm: basicEnemyForm
+                      ,basicShipForm: basicShipForm
+                      ,mkBulletForm: mkBulletForm
+                      ,mkEnemyForm: mkEnemyForm
+                      ,shipForm: shipForm
+                      ,bulletsForms: bulletsForms
+                      ,enemiesForms: enemiesForms
+                      ,itemsToShow: itemsToShow
+                      ,displayGame: displayGame
+                      ,displayGameOver: displayGameOver
+                      ,display: display
+                      ,input: input
+                      ,gameState: gameState
+                      ,main: main};
+   return _elm.Main.values;
+};

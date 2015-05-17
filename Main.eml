@@ -1,0 +1,244 @@
+import Graphics.Element exposing (..)
+import Graphics.Collage exposing (..)
+import Color exposing (..)
+import Time
+import Signal exposing (..)
+import Window
+import Mouse
+import Random exposing (..)
+
+
+
+{-- Part 1: Model the user input ----------------------------------------------
+What information do you need to represent all relevant user input?
+Task: Redefine `UserInput` to include all of the information you need.
+      Redefine `userInput` to be a signal that correctly models the user
+      input as described by `UserInput`.
+------------------------------------------------------------------------------}
+
+type alias Position = { x : Int, y : Int }
+pairToPosition : (Int, Int) -> Position
+pairToPosition (x1, y1) = { x = x1, y = y1 }
+
+type Input = MouseClick () | MousePosition Position | Timer Float
+
+mouseClickInput : Signal Input
+mouseClickInput = MouseClick <~ Mouse.clicks
+
+mousePositionInput : Signal Input
+mousePositionInput = MousePosition << pairToPosition <~ Mouse.position
+
+timerInput : Signal Input
+timerInput = Timer <~ (Time.fps 30)
+
+
+
+{-- Part 2: Model the game ----------------------------------------------------
+What information do you need to represent the entire game?
+Tasks: Redefine `GameState` to represent your particular game.
+       Redefine `defaultGame` to represent your initial game state.
+For example, if you want to represent many objects that just have a position,
+your GameState might just be a list of coordinates and your default game might
+be an empty list (no objects at the start):
+    type GameState = { objects : [(Float,Float)] }
+    defaultGame = { objects = [] }
+------------------------------------------------------------------------------}
+
+type alias Bullet = { position : Position }
+
+type alias Enemy = { position : Position }
+
+type alias GameState = { mPosition : Position
+                       , clicks : Int
+                       , bullets : List Bullet
+                       , enemies : List Enemy
+                       , elapsedTime : Float
+                       , createdEnemies : Int
+                       , seed : Seed
+                       , gameOver : Bool }
+
+defaultGame : GameState
+defaultGame = { mPosition = { x = 0, y = 0 }
+              , clicks = 0
+              , bullets = []
+              , enemies = []
+              , elapsedTime = 0.0
+              , createdEnemies = 0
+              , seed = initialSeed 30
+              , gameOver = False }
+
+
+{-- Part 3: Update the game ---------------------------------------------------
+How does the game step from one state to another based on user input?
+Task: redefine `stepGame` to use the UserInput and GameState
+      you defined in parts 1 and 2. Maybe use some helper functions
+      to break up the work, stepping smaller parts of the game.
+------------------------------------------------------------------------------}
+
+bulletSpeed : Int
+bulletSpeed = 10
+
+enemySpeed : Int
+enemySpeed = 5
+
+addBullet : GameState -> GameState
+addBullet gs = let newBullet = { position = gs.mPosition }
+                in { gs | bullets <- newBullet :: gs.bullets }
+
+moveBullet : Bullet -> Bullet
+moveBullet b = let newPosition = { x = b.position.x, y = b.position.y - bulletSpeed }
+                in { b | position <- newPosition }
+
+moveBullets : GameState -> GameState
+moveBullets gs = {gs | bullets <- List.map moveBullet gs.bullets }
+
+randomPosition : GameState -> (GameState, Position)
+randomPosition gs = let (valueX, newSeed) = generate (int 50 750) gs.seed
+                        position          = { x = valueX, y = 50 }
+                        gs'               = { gs | seed <- newSeed }
+                     in (gs', position)
+
+addEnemy : GameState -> GameState
+addEnemy gs = let (gs', newPosition) = randomPosition gs
+                  newEnemy = { position = newPosition }
+               in { gs' | createdEnemies <- gs.createdEnemies + 1
+                        , enemies <- newEnemy :: gs.enemies }
+
+moveEnemy : Enemy -> Enemy
+moveEnemy e = let newPosition = { x = e.position.x, y = e.position.y + enemySpeed }
+               in { e | position <- newPosition }
+
+moveEnemies : GameState -> GameState
+moveEnemies gs = { gs | enemies <- List.map moveEnemy gs.enemies }
+
+collision : Enemy -> Bullet -> Bool
+collision e b = (abs (b.position.y - e.position.y)) < 30
+  && (abs (b.position.x - e.position.x)) < 22
+
+enemyHit : List Bullet -> Enemy -> Bool
+enemyHit bs enemy = List.all (\b -> not (collision enemy b)) bs
+
+checkCollisions : GameState -> GameState
+checkCollisions gs = { gs | enemies <- List.filter (enemyHit gs.bullets) gs.enemies }
+
+addEnemyIfNeeded : GameState -> GameState
+addEnemyIfNeeded gs = if (round gs.elapsedTime) > gs.createdEnemies * 500
+  then addEnemy gs else gs
+
+inBoard : Position -> Bool
+inBoard { x, y } = x > 0 && x < 800 && y > 0 && y < 800
+
+inBoardBullet : Bullet -> Bool
+inBoardBullet b = inBoard b.position
+
+removeOutOfTheBoardBullets : GameState -> GameState
+removeOutOfTheBoardBullets gs = { gs | bullets <- List.filter inBoardBullet gs.bullets }
+
+inBoardEnemy : Enemy -> Bool
+inBoardEnemy e = inBoard e.position
+  
+removeOutOfTheBoardEnemies : GameState -> GameState
+removeOutOfTheBoardEnemies gs = { gs | enemies <- List.filter inBoardEnemy gs.enemies }
+
+updateElapsedTime : Float -> GameState -> GameState
+updateElapsedTime delta gs = { gs | elapsedTime <- gs.elapsedTime + delta }
+
+updatePosition : Position -> GameState -> GameState
+updatePosition newPos gs = { gs | mPosition <- newPos }
+
+incrementClicks : GameState -> GameState
+incrementClicks gs = { gs | clicks <- gs.clicks + 1 }
+
+enemyBelowScreen : Enemy -> Bool
+enemyBelowScreen e = e.position.y >= 800
+
+checkIfGameOver : GameState -> GameState
+checkIfGameOver gs = if List.any enemyBelowScreen gs.enemies
+  then { gs | gameOver <- True } else gs
+
+stepGameFn : Input -> GameState -> GameState
+stepGameFn userInput = case userInput of
+  MousePosition mousePosition -> updatePosition mousePosition
+  MouseClick () -> addBullet
+                    << incrementClicks
+  Timer delta -> (updateElapsedTime delta)
+                  << addEnemyIfNeeded
+                  << checkCollisions
+                  << moveEnemies
+                  << moveBullets
+                  << removeOutOfTheBoardEnemies
+                  << removeOutOfTheBoardBullets
+                  << checkIfGameOver
+
+stepGame : Input -> GameState -> GameState
+stepGame userInput gameState = stepGameFn userInput gameState
+
+
+{-- Part 4: Display the game --------------------------------------------------
+How should the GameState be displayed to the user?
+Task: redefine `display` to use the GameState you defined in part 2.
+------------------------------------------------------------------------------}
+
+move' : Position -> Form -> Form
+move' pos f = move (toFloat (pos.x - 400), toFloat (400 - pos.y)) f
+
+basicBulletForm : Form
+basicBulletForm = filled blue <| rect 5 20
+
+basicEnemyForm : Form
+basicEnemyForm = rotate (degrees -18) <| filled blue <| ngon 5 20
+
+basicShipForm : Form
+basicShipForm = rotate (degrees -30) <| filled red <| ngon 3 30
+
+mkBulletForm : Bullet -> Form
+mkBulletForm b = move' b.position basicBulletForm
+
+mkEnemyForm : Enemy -> Form
+mkEnemyForm e = move' e.position basicEnemyForm
+
+shipForm : GameState -> Form
+shipForm gameState = move' gameState.mPosition basicShipForm
+
+bulletsForms : GameState -> List Form
+bulletsForms gameState = List.map mkBulletForm gameState.bullets
+
+enemiesForms : GameState -> List Form
+enemiesForms gameState = List.map mkEnemyForm gameState.enemies
+
+itemsToShow : GameState -> List Form
+itemsToShow gs = let ship    = shipForm gs
+                     bullets = bulletsForms gs
+                     enemies = enemiesForms gs
+                 in ship :: bullets ++ enemies
+
+displayGame : GameState -> Element
+displayGame gs = flow down [
+  collage 800 800 <| itemsToShow gs,
+  show gs.mPosition,
+  show gs.clicks,
+  show gs.elapsedTime,
+  show gs.enemies ]
+
+displayGameOver : GameState -> Element
+displayGameOver gs = flow down [
+  show "Koniec gry!" ]
+
+display : (Int,Int) -> GameState -> Element
+display (w,h) gs = if gs.gameOver
+  then displayGameOver gs else displayGame gs
+
+
+{-- That's all folks! ---------------------------------------------------------
+The following code puts it all together and shows it on screen.
+------------------------------------------------------------------------------}
+
+
+input : Signal Input
+input = Signal.mergeMany [ mouseClickInput, mousePositionInput, timerInput ]
+
+gameState : Signal GameState
+gameState = Signal.foldp stepGame defaultGame input
+
+main : Signal Element
+main = Signal.map2 display Window.dimensions gameState
